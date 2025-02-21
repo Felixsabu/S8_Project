@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Dental Shade Matching & Object Detection</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+  <style>
+    body {
+      /* background: url('https://img.freepik.com/free-photo/close-up-hands-wearing-protective-gloves_23-2149164295.jpg?t=st=1735456321~exp=1735459921~hmac=dcd4e004a035686ebc3b2bf1d942c58a6ecf210e1325bab37ba3c8f111463920&w=996') no-repeat center center fixed; */
+      background-size: contain;
+      font-family: 'Arial', sans-serif;
+      color: #343a40;
+    }
+
+    .jumbotron {
+      background-color: rgba(0, 123, 255, 0.9);
+      color: white;
+      text-align: center;
+      border-radius: 15px;
+      padding: 30px;
+    }
+
+    .form-horizontal {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .form-group label {
+      color: #343a40;
+      font-weight: bold;
+    }
+
+    .form-control {
+      border: 2px solid #6c757d;
+      border-radius: 5px;
+      padding: 10px;
+    }
+
+    .btn-success {
+      background-color: #28a745;
+      border-color: #28a745;
+      border-radius: 20px;
+      font-size: 16px;
+      padding: 10px 20px;
+      transition: background-color 0.3s ease;
+    }
+
+    .btn-success:hover {
+      background-color: #218838;
+      border-color: #1e7e34;
+    }
+
+    .form-group input[type="file"] {
+      border: none;
+      background: #f1f1f1;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 16px;
+      color: #495057;
+    }
+
+    .form-group input[type="file"]:hover {
+      background: #e9ecef;
+    }
+
+    h2, h3 {
+      color: #343a40;
+      text-align: center;
+    }
+
+    img {
+      display: block;
+      margin: 20px auto;
+      border-radius: 10px;
+      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    canvas {
+      display: block;
+      border: 2px solid #2c3e50;
+      margin: 30px auto;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 20px;
+      color: #6c757d;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1 class="jumbotron">Dental Shade Matching & Object Detection</h1>
+
+  <!-- Dental Shade Matching Form -->
+  <form class="form-horizontal" action="/submit" method="post" enctype="multipart/form-data">
+    <div class="form-group">
+      <label class="control-label col-sm-2" for="fileUpload">Upload Your Image for Shade Matching:</label>
+      <div class="col-sm-10">          
+        <input type="file" class="form-control" name="my_image" id="fileUpload">
+      </div>
+    </div>
+
+    <div class="form-group">        
+      <div class="col-sm-offset-2 col-sm-10 text-center">
+        <button type="submit" class="btn btn-success">Submit for Shade Matching</button>
+      </div>
+    </div>
+  </form>
+
+  {% if image_target %}
+    <img src="{{image_target}}" height="300px" width="400px" alt="Uploaded Image">
+    <h2>Shade Matching Result</h2>
+    <h3>The matching shade guide is: {{test1}}</h3>
+    <h3>Cavity condition: {{test2}}</h3>
+    <h3>Similar shade guides are: {{test4}}</h3>
+  {% endif %}
+
+  <!-- YOLO Object Detection Form -->
+  <h2>YOLO Object Detection</h2>
+  <input id="uploadInput" type="file" class="form-control"/>
+  <canvas></canvas>
+</div>
+
+<script>
+  /**
+   * "Upload" button onClick handler: uploads selected image file
+   * to backend, receives array of detected objects
+   * and draws them on top of image
+   */
+  const input = document.getElementById("uploadInput");
+  input.addEventListener("change", async (event) => {
+    const data = new FormData();
+    data.append("image_file", event.target.files[0], "image_file");
+    const response = await fetch("/detect", {
+      method: "post",
+      body: data,
+    });
+    const boxes = await response.json();
+    draw_image_and_boxes(event.target.files[0], boxes);
+  });
+
+  /**
+   * Function draws the image from provided file
+   * and bounding boxes of detected objects on
+   * top of the image
+   * @param file Uploaded file object
+   * @param boxes Array of bounding boxes in format [[x1,y1,x2,y2,object_type,probability],...]
+   */
+  function draw_image_and_boxes(file, boxes) {
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.querySelector("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      ctx.strokeStyle = "#00FF00";
+      ctx.lineWidth = 3;
+      ctx.font = "18px serif";
+      boxes.forEach(([x1, y1, x2, y2, label, confidence]) => {
+        // Draw rectangle around the object
+        ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+        // Prepare text to display (label and confidence)
+        const text = `${label} (${confidence})`;
+
+        // Measure text width for background rectangle
+        const textWidth = ctx.measureText(text).width;
+
+        // Draw background rectangle for text
+        ctx.fillStyle = "#00FF00";
+        ctx.fillRect(x1, y1 - 25, textWidth + 10, 25);
+
+        // Draw text (label and confidence)
+        ctx.fillStyle = "#000000";
+        ctx.fillText(text, x1, y1 - 7);
+      });
+    };
+  }
+</script>
+
+</body>
+</html>
